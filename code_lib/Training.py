@@ -84,9 +84,9 @@ class Training():
             s_init = jnp.c_[params[0][-1].T, params[1][-1]]
             s_init = s_init[0,:][:-1]
             gL2 = jx.grad(loss2)
-            B = gL2(s_init*0, last_homo, last_homo_g,last_homo_g2, Y_b)
+            B = gL2(s_init*0, last_homo, last_homo_g,last_homo_g2, X_b, Y_b)
             ggL2 = jx.jacfwd(gL2)
-            A = 0.5*ggL2(s_init*0, last_homo, last_homo_g, last_homo_g2, Y_b)
+            A = 0.5*ggL2(s_init*0, last_homo, last_homo_g, last_homo_g2, X_b, Y_b)
             s_fin = -0.5*jnp.linalg.pinv(A)@B
             params[0][-1] = s_fin[:,None]
             params[1][-1] = s_fin[-1:][:,None]
