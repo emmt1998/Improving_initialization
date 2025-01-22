@@ -91,7 +91,19 @@ $$
 $$
 Luego,
 $$
-    N_{\theta}''(x)^2 
+    \sum_{i=1}^{N} N_{\theta}''(x_i)^2 
     =
-    W^1 \left( TODO \right) [W^1]^T
+    W^1 [W^0 [W^0]^T] \left( \sum_{i=1}^{N} \sigma''_i \sigma_i''^T \right) [W^1]^T
+$$
+donde $\sigma''_i = \sigma''_i(W^0 x_i + b^0)$. Así, obtenemos que
+$$
+    A = [W^0 [W^0]^T] \sum_{i=1}^{N} \sigma''_i \sigma_i''^T
+    \quad
+    B = 2 W^0 [W^0]^T 
+    \begin{bmatrix} 
+        | & & |\\
+        \sigma''_1 & \cdots & \sigma''_2\\
+        | & & |
+    \end{bmatrix} 
+    f(\vec x).
 $$
