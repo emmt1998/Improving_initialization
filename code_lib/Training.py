@@ -102,3 +102,69 @@ class Training():
                 #if train_loss_value<stop:break
         return self.get_params(opt_state), train_loss, val_loss
 
+class Training2():
+    def __init__(self, optimizer, opt_args, mode="R"):
+        self.opt_init, self.opt_update, self.get_params = optimizer(opt_args["lr"])
+        options = {
+            "R":self.batchsampler,
+            "MC":self.uniformsampler
+        }
+        self.sampler = options[mode]
+
+    @partial(jx.jit, static_argnums=(0,1,))
+    def step(self, loss, i, opt_state, s, X_batch, Y_batch, X_c):
+        # Optimizer step
+        params = self.get_params(opt_state)
+        g = jx.grad(loss)(params, s, X_batch, Y_batch, X_c)
+        return self.opt_update(i, g, opt_state)
+    
+    @partial(jx.jit, static_argnums=(0,1,))
+    def leastsquares(self, loss, params, s, X, Y, X_c):
+        gl = jx.grad(loss, argnums=1)
+        B = gl(params, s*0, X, Y, X_c)
+        A = 0.5*jx.jacfwd(gl, argnums=1)(params, s*0, X, Y, X_c).squeeze()
+        # s = -0.5*jnp.linalg.inv(A+1e-5*jnp.eye(B.shape[0]))@B
+        s = -0.5*jnp.linalg.pinv(A)@B
+        return s
+    
+    @partial(jx.jit, static_argnums=(0,4))
+    def batchsampler(self, key, X, Y, bsize):
+        perm = jx.random.choice(key, jnp.arange(X.shape[0]), (bsize,))
+        key, subkey = jx.random.split(key)
+        X_b = X[perm]
+        Y_b = Y[perm]
+        return key, X_b, Y_b
+    
+    @partial(jx.jit, static_argnums=(0,4))
+    def uniformsampler(self, key, X, Y, bsize):
+        X_b = jx.random.uniform(key, (bsize,X.shape[-1]), minval =-1, maxval=1)
+        key, subkey = jx.random.split(key)
+        Y_b = X_b
+        return key, X_b, Y_b
+
+    def train(self, loss, X, Y, X_c, opt_state, X_bd = None, X_bn = None, bsize=16, nIter = 10000, stop=1e-5):
+        train_loss = []
+        val_loss = []
+        key = jx.random.PRNGKey(0)
+        params = self.get_params(opt_state)
+        s0 = params[0][-1]
+        key, X_b, Y_b = self.sampler(key, X, Y, bsize)
+        s = self.leastsquares(loss, params, s0, X_b, Y_b, X_c)
+        # s = s0
+        for it in (pbar := tqdm(range(nIter))):        
+            key, X_b, Y_b = self.sampler(key, X, Y, bsize)
+            opt_state = self.step(loss, it, opt_state, s, X_b, Y_b, X_c)
+            params = self.get_params(opt_state)
+            s = self.leastsquares(loss, params, s, X_b, Y_b, X_c)
+            # s = params[0][-1]
+            if it % 50 == 0:
+                params = self.get_params(opt_state)
+                train_loss_value = loss(params, s, X, Y, X_c)
+                train_loss.append(train_loss_value)
+                to_print = "it %i, train loss = %e" % (it, train_loss_value)
+                pbar.set_description(f"{to_print}")
+                #if train_loss_value<stop:break
+        params = self.get_params(opt_state)
+        params[0][-1] = s
+        return params, train_loss, val_loss
+
