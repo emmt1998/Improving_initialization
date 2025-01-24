@@ -61,14 +61,14 @@ función de activación.
 ![he](img/1d_hyperplane_hen.png)
 ![equi](img/1d_hyperplane_equi.png)
 
-### Problema de Ajuste ###
+### PINNs: Laplaciano ###
 
 * Neuronas: 32
 * Pérdida: $L(N) = \lVert N(x) - (\cos(2\pi x) - 1) \rVert_{L^2}^2$ y la aproximamos
 usando el estimador de MonteCarlo con $1024$ puntos.
 * Épocas: 1000
 * Optimizador: Adam con *learning rate* $1e-3$.
-* Activación: Tanh 
+* Activación: $\mathrm{ReLU}^2$ 
 
 ![fit](img/1d_fit_final.png)
 
@@ -82,12 +82,12 @@ usando el estimador de MonteCarlo con $200$ puntos.
 * Optimizador: Adam con *learning rate* $1e-3$.
 * Activación: Tanh 
 
-![glorotn_final](img/1d_pinn_glorotn.png)
-![he_final](img/1d_pinn_hen.png)
-![equi_final](img/1d_pinn_equi.png)
+|Glorot Normal| He Normal | Equidistant |
+|:-:|:-:|:-:|
+|![glorotn_final](img/1d_pinn_glorotn.png)|![he_final](img/1d_pinn_hen.png)|![equi_final](img/1d_pinn_equi.png)|
 
 
-## Input 2d (o $n_0=1$) ##
+## Input 2d (o $n_0=2$) ##
 
 * Neuronas: 32
 * Pérdida: $L(N) = \lVert N''(x) + y\cos(x) \rVert_{L^2}^2$ y la aproximamos
