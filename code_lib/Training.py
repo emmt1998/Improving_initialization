@@ -107,7 +107,8 @@ class Training2():
         self.opt_init, self.opt_update, self.get_params = optimizer(opt_args["lr"])
         options = {
             "R":self.batchsampler,
-            "MC":self.uniformsampler
+            "MC":self.uniformsampler,
+            "QMC1": self.quadsampler
         }
         self.sampler = options[mode]
 
@@ -123,8 +124,10 @@ class Training2():
         gl = jx.grad(loss, argnums=1)
         B = gl(params, s*0, X, Y, X_c)
         A = 0.5*jx.jacfwd(gl, argnums=1)(params, s*0, X, Y, X_c).squeeze()
-        # s = -0.5*jnp.linalg.inv(A+1e-5*jnp.eye(B.shape[0]))@B
-        s = -0.5*jnp.linalg.pinv(A)@B
+        s = -0.5*jnp.linalg.inv(A+1e-6*jnp.eye(B.shape[0]))@B
+        # s = -0.5*jnp.linalg.inv(A)@B
+        # s = -0.5*jnp.linalg.pinv(A)@B
+        # np.cond(A.T@A)
         return s
     
     @partial(jx.jit, static_argnums=(0,4))
@@ -137,12 +140,26 @@ class Training2():
     
     @partial(jx.jit, static_argnums=(0,4))
     def uniformsampler(self, key, X, Y, bsize):
-        X_b = jx.random.uniform(key, (bsize,X.shape[-1]), minval =-1, maxval=1)
+        vmin = 0
+        vmax = 1
+        X_b = jx.random.uniform(key, (bsize, X.shape[-1]), minval =vmin, maxval=vmax)
         key, subkey = jx.random.split(key)
         Y_b = X_b
         return key, X_b, Y_b
 
-    def train(self, loss, X, Y, X_c, opt_state, X_bd = None, X_bn = None, bsize=16, nIter = 10000, stop=1e-5):
+    @partial(jx.jit, static_argnums=(0,4))
+    def quadsampler(self, key, X, Y, bsize):
+        vmin = 0
+        vmax = 1
+        line, h = jnp.linspace(vmin, vmax, bsize//2, retstep=True)
+        u = jx.random.uniform(key, (bsize//2, X.shape[-1]), minval =0, maxval=h)
+        X_b = jnp.vstack([line[:,None]+u, line[:,None]+h-u])
+
+        key, subkey = jx.random.split(key)
+        Y_b = X_b
+        return key, X_b, Y_b
+
+    def train(self, loss, X, Y, X_c, opt_state, X_bd = None, X_bn = None, bsize=16, nIter = 10000, stop=1e-8):
         train_loss = []
         val_loss = []
         key = jx.random.PRNGKey(0)
@@ -153,18 +170,19 @@ class Training2():
         # s = s0
         for it in (pbar := tqdm(range(nIter))):        
             key, X_b, Y_b = self.sampler(key, X, Y, bsize)
-            opt_state = self.step(loss, it, opt_state, s, X_b, Y_b, X_c)
             params = self.get_params(opt_state)
             s = self.leastsquares(loss, params, s, X_b, Y_b, X_c)
-            # s = params[0][-1]
+            opt_state = self.step(loss, it, opt_state, s, X_b, Y_b, X_c)
             if it % 50 == 0:
                 params = self.get_params(opt_state)
                 train_loss_value = loss(params, s, X, Y, X_c)
                 train_loss.append(train_loss_value)
                 to_print = "it %i, train loss = %e" % (it, train_loss_value)
                 pbar.set_description(f"{to_print}")
-                #if train_loss_value<stop:break
+                # if train_loss_value<stop:break
+                if jnp.isnan(train_loss_value):break
         params = self.get_params(opt_state)
+        s = self.leastsquares(loss, params, s, X_b, Y_b, X_c)
         params[0][-1] = s
         return params, train_loss, val_loss
 

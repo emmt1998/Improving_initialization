@@ -46,16 +46,30 @@ def init_params(layers, key, init='glorot_normal', activation='relu', **kwargs):
   return [Ws, bs]
 
 @jx.jit
-def forward_pass_multi(H, params, s):
+def forward_pass_multi(X, params, s):
   # Forward pass with tanh
   Ws = params[0]
   bs = params[1]
   N_layers = len(Ws)
+  H = X
+  N = 2
   for i in range(N_layers - 1):
     H = jnp.matmul(H, Ws[i]) + bs[i]
-    H = jx.nn.relu(H)**2
-  Y = jnp.matmul(H, s)
+    # H = (1/24)*jx.nn.relu(H)**4
+    # H = (1/6)*jx.nn.relu(H)**3
+    H = (jx.nn.relu(H)**N)#/(H**(N-1)+1)
+  Y = jnp.matmul(H, s)*((1-X)*X)
   return H, Y
+
+# @jx.jit
+# def forward_pass_multi(X, params, s):
+#   # Forward pass with tanh
+#   H, Y = forward_pass_multi_aux(X, params, s)
+#   _, ab = forward_pass_multi_aux(jnp.array([0, 1])[:,None], params, s)
+#   a, b = ab
+#   # Y = Y - ((b-a)*X+a)
+
+#   return H, Y
 
 forward_pass_multi_grad = jx.jit(jx.vmap(jx.jacrev(forward_pass_multi), in_axes=(0, None, None)))
 forward_pass_multi_grad2 = jx.jit(jx.vmap(jx.jacrev(jx.jacrev(forward_pass_multi)), in_axes=(0, None, None)))
